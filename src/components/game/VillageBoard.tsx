@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Player, GamePhase, RoleId } from '../../types/game';
 import { ROLES } from '../../engine/roles';
-import { Sparkles, Skull, Crown, Bot, Crosshair, Lock } from 'lucide-react';
+import { Sparkles, Skull, Crown, Bot, Crosshair, Lock, CheckCircle2 } from 'lucide-react';
 import { sfx } from '../../audio/soundEffects';
 
 interface VillageBoardProps {
@@ -9,7 +9,7 @@ interface VillageBoardProps {
   currentPlayerId: string;
   phase: GamePhase;
   selectedTargetId: string | null;
-  onSelectTarget: (targetId: string) => void;
+  onSelectTarget: (targetId: string | null) => void;
   revealRoleOnDeath?: boolean;
 }
 
@@ -55,7 +55,7 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
         {canInteract && (
           <div className="text-xs font-mono text-amber-400/90 flex items-center gap-1 animate-pulse">
             <Crosshair className="w-3.5 h-3.5 text-red-500" />
-            <span>{isNight ? 'Escolha o alvo da sua ação' : 'Selecione para votar'}</span>
+            <span>{isNight ? 'Clique para escolher/trocar seu alvo' : 'Clique para votar'}</span>
           </div>
         )}
       </div>
@@ -72,16 +72,21 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
               onClick={() => {
                 if (isTargetable) {
                   sfx.playParchment();
-                  onSelectTarget(player.id);
+                  // Toggle: if already selected, deselect; otherwise select
+                  if (isSelected) {
+                    onSelectTarget(null);
+                  } else {
+                    onSelectTarget(player.id);
+                  }
                 }
               }}
-              className={`relative rounded-lg p-3 flex flex-col items-center justify-between text-center transition-all duration-200 border ${
+              className={`relative rounded-lg p-3 flex flex-col items-center justify-between text-center transition-all duration-150 select-none border ${
                 !player.isAlive
                   ? 'bg-[#080a0e]/70 border-slate-800 opacity-60'
                   : isSelected
-                  ? 'bg-[#2b1010] border-red-500 ring-2 ring-red-500/40 shadow-lg scale-[1.02]'
+                  ? 'bg-[#2b1010] border-red-500 ring-2 ring-red-500/70 shadow-lg scale-[1.03]'
                   : isTargetable
-                  ? 'bg-[#161c28] border-[#2d3748] hover:border-amber-500/60 hover:bg-[#1a2232] cursor-pointer'
+                  ? 'bg-[#161c28] border-[#2d3748] hover:border-amber-500/80 hover:bg-[#1a2232] cursor-pointer active:scale-95'
                   : 'bg-[#161c28] border-[#222b3d]'
               } ${isMe ? 'ring-1 ring-amber-500/40' : ''}`}
             >
@@ -123,7 +128,7 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
                 >
                   {!player.isAlive ? (
                     <Skull className="w-6 h-6 text-red-500/80" />
-                  ) : player.role && (isMe || !player.isAlive) ? (
+                  ) : isMe && player.role ? (
                     ROLES[player.role]?.kanji || '忍'
                   ) : (
                     '忍'
@@ -148,6 +153,7 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
                   {player.name}
                 </div>
 
+                {/* Only reveal role if dead or if current player */}
                 {(!player.isAlive && revealRoleOnDeath && player.role) || (isMe && player.role) ? (
                   <div className="mt-1 flex justify-center">{getRoleBadge(player.role)}</div>
                 ) : null}
@@ -166,9 +172,9 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
               )}
 
               {isSelected && (
-                <div className="mt-1 text-[10px] font-mono text-red-400 font-bold flex items-center gap-1">
-                  <Crosshair className="w-3 h-3" />
-                  <span>ALVO</span>
+                <div className="mt-1.5 px-2 py-0.5 rounded bg-red-950 border border-red-500 text-[10px] font-mono text-red-300 font-bold flex items-center justify-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-red-400" />
+                  <span>{isNight ? 'ALVO DEFINIDO' : 'VOTO REGISTRADO'}</span>
                 </div>
               )}
             </div>

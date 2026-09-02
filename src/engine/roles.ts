@@ -188,14 +188,22 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
 export function distributeRoles(playerCount: number, enabledRoleIds: RoleId[]): RoleId[] {
   const pool: RoleId[] = [];
 
-  const nukeninCount = playerCount <= 4 ? 1 : playerCount <= 7 ? 2 : playerCount <= 10 ? 3 : 4;
-  const neutralCount = playerCount >= 6 ? 1 : 0;
+  // Balanced proportion matching social deduction standards:
+  // 4-5 players: exactly 1 Nukenin
+  // 6-8 players: exactly 2 Nukenin
+  // 9-11 players: 2 or 3 Nukenin
+  // 12+ players: 3 to 4 Nukenin
+  const nukeninCount =
+    playerCount <= 5 ? 1 : playerCount <= 8 ? 2 : playerCount <= 11 ? 3 : 4;
+  
+  // Neutrals only in larger games (7+ players)
+  const neutralCount = playerCount >= 7 && enabledRoleIds.includes('RENEGADO') ? 1 : 0;
   const villagerCount = playerCount - nukeninCount - neutralCount;
 
   const availableNukenin = enabledRoleIds.filter((id) => ROLES[id].faction === 'NUKENIN');
   const availableVillagers = enabledRoleIds.filter((id) => ROLES[id].faction === 'ALDEIA');
-  const availableNeutrals = enabledRoleIds.filter((id) => ROLES[id].faction === 'NEUTRO');
 
+  // Add Nukenin roles (ensure at least 1 Assassin or Silenciador)
   const nukeninSelection: RoleId[] = [];
   if (availableNukenin.includes('ASSASSINO')) {
     nukeninSelection.push('ASSASSINO');
@@ -210,15 +218,24 @@ export function distributeRoles(playerCount: number, enabledRoleIds: RoleId[]): 
     }
   }
 
+  // Add Neutrals if needed
   const neutralSelection: RoleId[] = [];
-  if (neutralCount > 0 && availableNeutrals.length > 0) {
+  if (neutralCount > 0) {
     neutralSelection.push('RENEGADO');
   }
 
+  // Add Villagers: ALWAYS guarantee powerful investigation & defense roles (Investigador + Curandeiro/Anjo/Samurai)
   const villagerSelection: RoleId[] = [];
-  const priorityVillagers: RoleId[] = ['INVESTIGADOR', 'CURANDEIRO', 'ANJO', 'SAMURAI', 'ALDEAO_LIDER', 'ESCUDEIRO', 'ESPIRITO', 'POLICIAL'].filter((r) =>
-    availableVillagers.includes(r as RoleId)
-  ) as RoleId[];
+  const priorityVillagers: RoleId[] = [
+    'INVESTIGADOR',
+    'CURANDEIRO',
+    'ANJO',
+    'SAMURAI',
+    'ALDEAO_LIDER',
+    'ESCUDEIRO',
+    'ESPIRITO',
+    'POLICIAL',
+  ].filter((r) => availableVillagers.includes(r as RoleId)) as RoleId[];
 
   const shuffledPriority = [...priorityVillagers].sort(() => Math.random() - 0.5);
 

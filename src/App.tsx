@@ -333,7 +333,7 @@ export const App: React.FC = () => {
     addSystemMessage('A escuridão desce sobre a vila. Ninjas, executem suas missões secretas sob o manto da noite!');
   };
 
-  // 5. Send Chat Message
+  // 5. Send Chat Message (Role is NEVER leaked in public chat)
   const handleSendMessage = (content: string, channel: 'PUBLIC' | 'NUKENIN' | 'DEAD') => {
     if (!currentPlayer) return;
 
@@ -341,7 +341,6 @@ export const App: React.FC = () => {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       senderId: currentPlayer.id,
       senderName: currentPlayer.name,
-      senderRole: channel === 'NUKENIN' || channel === 'DEAD' ? currentPlayer.role : undefined,
       content,
       timestamp: Date.now(),
       channel,
@@ -372,11 +371,13 @@ export const App: React.FC = () => {
       peerManagerRef.current?.submitNightAction(currentPlayer.id, targetId);
     }
 
-    sfx.playKatanaSlash();
+    if (targetId) {
+      sfx.playKatanaSlash();
+    }
   };
 
   // 7. Submit Vote
-  const handleSelectVoteTarget = (targetId: string) => {
+  const handleSelectVoteTarget = (targetId: string | null) => {
     if (!currentPlayer || !currentPlayer.isAlive) return;
     setSelectedTargetId(targetId);
 
@@ -393,7 +394,9 @@ export const App: React.FC = () => {
       peerManagerRef.current?.submitVote(currentPlayer.id, targetId);
     }
 
-    sfx.playTaiko();
+    if (targetId) {
+      sfx.playTaiko();
+    }
   };
 
   // Phase transition: End Night -> Resolve and show Dawn announcement

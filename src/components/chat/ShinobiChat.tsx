@@ -21,7 +21,7 @@ export const ShinobiChat: React.FC<ShinobiChatProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const [activeTab, setActiveTab] = useState<'PUBLIC' | 'NUKENIN' | 'DEAD'>('PUBLIC');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const isNukenin = currentPlayer.role && ROLES[currentPlayer.role]?.faction === 'NUKENIN';
   const isDead = !currentPlayer.isAlive;
@@ -33,8 +33,11 @@ export const ShinobiChat: React.FC<ShinobiChatProps> = ({
     }
   }, [isDead]);
 
+  // Safe inner-container scroll (Never scrolls the window or page!)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, [messages, activeTab]);
 
   const handleSend = (e: React.FormEvent) => {
@@ -134,8 +137,11 @@ export const ShinobiChat: React.FC<ShinobiChatProps> = ({
         </span>
       </div>
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 p-3 overflow-y-auto space-y-2.5 min-h-[220px] max-h-[380px] bg-[#0c1017]/50">
+      {/* Messages Scroll Area - Pure internal scrolling, no window shift */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 p-3 overflow-y-auto space-y-2.5 min-h-[220px] max-h-[380px] bg-[#0c1017]/50"
+      >
         {filteredMessages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 text-xs py-8">
             <span className="font-kanji text-2xl mb-1 text-slate-700">靜</span>
@@ -164,11 +170,7 @@ export const ShinobiChat: React.FC<ShinobiChatProps> = ({
               >
                 <div className="flex items-center gap-1.5 mb-0.5 text-[10px] text-slate-400">
                   <span className="font-semibold text-slate-300">{msg.senderName}</span>
-                  {msg.senderRole && (
-                    <span className="text-[9px] px-1 rounded bg-red-950/80 text-red-300 border border-red-800/60 font-mono">
-                      {ROLES[msg.senderRole]?.name || msg.senderRole}
-                    </span>
-                  )}
+                  {/* Roles are NEVER revealed in public chat to preserve mystery */}
                   <span className="text-slate-600 font-mono">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -190,7 +192,6 @@ export const ShinobiChat: React.FC<ShinobiChatProps> = ({
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}

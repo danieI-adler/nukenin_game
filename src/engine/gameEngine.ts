@@ -26,7 +26,7 @@ export class GameEngine {
     const playerMap = new Map<string, Player>(players.map((p) => [p.id, p]));
     const livingPlayers = players.filter((p) => p.isAlive);
 
-    // 1. PHASE 1: SILENCIADOR
+    // 1. PHASE 1: SILENCIADOR (Illusionist acts first)
     const silencers = livingPlayers.filter((p) => p.role === 'SILENCIADOR' && p.nightActionTarget);
     for (const silencer of silencers) {
       const target = playerMap.get(silencer.nightActionTarget!);
@@ -37,7 +37,7 @@ export class GameEngine {
       }
     }
 
-    // 2. PHASE 2: INVESTIGATIONS
+    // 2. PHASE 2: INVESTIGATIONS (Detective & Spy)
     for (const p of livingPlayers) {
       if (p.isSilenced || !p.nightActionTarget) continue;
       const target = playerMap.get(p.nightActionTarget);
@@ -61,7 +61,7 @@ export class GameEngine {
       }
     }
 
-    // 3. PHASE 3: DEFENSES
+    // 3. PHASE 3: DEFENSES (Healer, Angel, Shieldbearer)
     const protectedTargets = new Set<string>();
     const angelProtectedMap = new Map<string, string>();
     const shieldReflectMap = new Map<string, string>();
@@ -86,7 +86,7 @@ export class GameEngine {
       }
     }
 
-    // 4. PHASE 4: ATTACKS
+    // 4. PHASE 4: ATTACKS (Nukenin collective, Samurai blade, Kamikaze explosion, Rogue)
     interface AttackEvent {
       attackerId: string;
       attackerRole: RoleId;
@@ -96,12 +96,13 @@ export class GameEngine {
 
     const incomingAttacks: AttackEvent[] = [];
 
+    // Nukenin Collective Target
     const nukeninAttackers = livingPlayers.filter(
       (p) => !p.isSilenced && (p.role === 'ASSASSINO' || p.role === 'SILENCIADOR' || p.role === 'ESPIAO' || p.role === 'APRENDIZ')
     );
     const nukeninTargets: Record<string, number> = {};
     for (const nuke of nukeninAttackers) {
-      if (nuke.nightActionTarget && (nuke.role === 'ASSASSINO' || livingPlayers.every((x) => x.role !== 'ASSASSINO'))) {
+      if (nuke.nightActionTarget) {
         nukeninTargets[nuke.nightActionTarget] = (nukeninTargets[nuke.nightActionTarget] || 0) + 1;
       }
     }
@@ -115,17 +116,16 @@ export class GameEngine {
       }
     }
 
-    if (topNukeninTarget) {
+    if (topNukeninTarget && nukeninAttackers.length > 0) {
       const mainAttacker = nukeninAttackers.find((p) => p.role === 'ASSASSINO') || nukeninAttackers[0];
-      if (mainAttacker) {
-        incomingAttacks.push({
-          attackerId: mainAttacker.id,
-          attackerRole: mainAttacker.role!,
-          targetId: topNukeninTarget,
-        });
-      }
+      incomingAttacks.push({
+        attackerId: mainAttacker.id,
+        attackerRole: mainAttacker.role!,
+        targetId: topNukeninTarget,
+      });
     }
 
+    // Samurai Blade (1x use)
     for (const p of livingPlayers) {
       if ((p.role === 'SAMURAI' || p.role === 'POLICIAL') && p.nightActionTarget && !p.isSilenced) {
         if ((p.usesRemaining ?? 1) > 0) {
@@ -140,6 +140,7 @@ export class GameEngine {
       }
     }
 
+    // Kamikaze Suicide Bomb (1x use)
     for (const p of livingPlayers) {
       if (p.role === 'KAMIKAZE' && p.nightActionTarget && !p.isSilenced) {
         if ((p.usesRemaining ?? 1) > 0) {
@@ -163,6 +164,7 @@ export class GameEngine {
       }
     }
 
+    // Renegado Attack
     for (const p of livingPlayers) {
       if (p.role === 'RENEGADO' && p.nightActionTarget && !p.isSilenced) {
         incomingAttacks.push({
@@ -181,6 +183,7 @@ export class GameEngine {
       const attacker = playerMap.get(attack.attackerId);
       if (!target || !target.isAlive) continue;
 
+      // 5.1 Shieldbearer Reflection
       if (shieldReflectMap.has(target.id) && attacker && attacker.id !== target.id) {
         report.reflectedAttacks.push({
           attackerId: attacker.id,
@@ -192,6 +195,7 @@ export class GameEngine {
         continue;
       }
 
+      // 5.2 Angel Divine Retaliation
       if (angelProtectedMap.has(target.id) && attacker && attacker.id !== target.id) {
         report.narrative.push(`A barreira divina do Anjo protegeu ${target.name} e fulminou o atacante!`);
         pendingDeaths.add(attacker.id);
@@ -199,11 +203,13 @@ export class GameEngine {
         continue;
       }
 
+      // 5.3 Healer Regular Protection
       if (protectedTargets.has(target.id) && !attack.isGuaranteedKill) {
         report.narrative.push(`Um shinobi sobreviveu a um ataque mortal graças aos cuidados médicos na noite.`);
         continue;
       }
 
+      // 5.4 Normal elimination
       pendingDeaths.add(target.id);
       target.deathCause =
         attack.attackerRole === 'ASSASSINO'
@@ -321,16 +327,21 @@ export class GameEngine {
     const livingAldeia = living.filter((p) => p.role && ROLES[p.role].faction === 'ALDEIA').length;
     const livingNeutro = living.filter((p) => p.role && ROLES[p.role].faction === 'NEUTRO').length;
 
+    // 1. Rogue Solo Win
     if (living.length === 1 && living[0].role === 'RENEGADO') {
       return 'NEUTRO';
     }
 
-    if (livingNukenin > 0 && livingNukenin >= livingAldeia + livingNeutro) {
-      return 'NUKENIN';
-    }
-
+    // 2. Aldeia Win (All evil/neutrals eliminated)
     if (livingNukenin === 0 && livingNeutro === 0 && livingAldeia > 0) {
       return 'ALDEIA';
+    }
+
+    // 3. Nukenin Win
+    // If Nukenin >= livingAldeia + livingNeutro, check if Mayor (with 2 votes) could still tie/eliminate
+    const hasMayorAlive = living.some((p) => p.role === 'ALDEAO_LIDER' && p.isAlive);
+    if (livingNukenin > 0 && (livingNukenin > livingAldeia + livingNeutro || (livingNukenin === livingAldeia + livingNeutro && !hasMayorAlive))) {
+      return 'NUKENIN';
     }
 
     return null;

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Player } from '../../types/game';
 import { ROLES } from '../../engine/roles';
-import { Moon, Lock, Crosshair } from 'lucide-react';
+import { Moon, Lock, Crosshair, XCircle, CheckCircle } from 'lucide-react';
 import { sfx } from '../../audio/soundEffects';
 
 interface NightPhaseOverlayProps {
@@ -46,7 +46,7 @@ export const NightPhaseOverlay: React.FC<NightPhaseOverlayProps> = ({
         </div>
       </div>
 
-      <div className="bg-[#141a24]/90 border border-[#252f42] rounded-lg p-3.5 mb-4">
+      <div className="bg-[#141a24]/90 border border-[#252f42] rounded-lg p-3.5 mb-2">
         {isSilenced ? (
           <div className="flex items-center gap-2 text-red-400 text-xs font-semibold">
             <Lock className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -54,36 +54,40 @@ export const NightPhaseOverlay: React.FC<NightPhaseOverlayProps> = ({
           </div>
         ) : !hasAction ? (
           <div className="text-xs text-slate-400 leading-relaxed">
-            Seu cargo não possui ação ativa esta noite. Fique em guarda e observe atentamente o desenrolar dos acontecimentos ao amanhecer.
+            Seu cargo não possui ação ativa esta noite. Fique em guarda e observe o debate ao amanhecer.
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <div className="text-xs text-slate-200 font-medium">
               <span className="text-amber-400 font-bold">Objetivo Noturno: </span>
               {role.detailedSkill}
             </div>
 
             {targetPlayer ? (
-              <div className="flex items-center justify-between bg-black/40 border border-red-900/50 rounded p-2 text-xs">
-                <div className="flex items-center gap-1.5 text-slate-200">
-                  <Crosshair className="w-3.5 h-3.5 text-red-400 animate-spin" />
-                  <span>Alvo Selecionado:</span>
-                  <strong className="text-amber-300 font-semibold">{targetPlayer.name}</strong>
+              <div className="flex items-center justify-between bg-black/50 border border-red-700/80 rounded-lg p-2.5 text-xs">
+                <div className="flex items-center gap-2 text-slate-200">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <span className="text-slate-400 text-[11px]">Alvo Selecionado: </span>
+                    <strong className="text-amber-300 font-bold text-xs">{targetPlayer.name}</strong>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    sfx.playKatanaSlash();
-                    onConfirmNightAction(targetPlayer.id);
+                    sfx.playParchment();
+                    onConfirmNightAction(null);
                   }}
-                  className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white font-semibold text-xs transition-colors shadow"
+                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs transition-colors flex items-center gap-1 border border-slate-600"
                 >
-                  Confirmar Ação
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Cancelar</span>
                 </button>
               </div>
             ) : (
-              <div className="text-xs text-amber-400/90 italic flex items-center gap-1">
-                <span>Clique em um shinobi na lista da vila abaixo para definir seu alvo.</span>
+              <div className="text-xs text-amber-400/90 italic flex items-center gap-1.5 p-2 rounded bg-amber-950/20 border border-amber-800/30">
+                <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                <span>Clique diretamente em um shinobi no quadro da vila para aplicar sua ação.</span>
               </div>
             )}
           </div>
