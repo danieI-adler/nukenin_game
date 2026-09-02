@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="46" fill="#121722" stroke="#b91c1c" stroke-width="4"/>
+  <circle cx="50" cy="50" r="38" fill="none" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <!-- Shuriken / Kunai Star -->
+  <path d="M50 12 L56 42 L88 50 L56 58 L50 88 L44 58 L12 50 L44 42 Z" fill="#dc2626" stroke="#fef08a" stroke-width="1.5"/>
+  <circle cx="50" cy="50" r="7" fill="#121722" stroke="#fef08a" stroke-width="2"/>
+  <!-- Japanese Kanji 忍 (Shinobi / Ninja) -->
+  <text x="50" y="55" font-family="'Yuji Boku', serif, sans-serif" font-size="10" font-weight="bold" fill="#fef08a" text-anchor="middle" dominant-baseline="middle">忍</text>
+</svg>

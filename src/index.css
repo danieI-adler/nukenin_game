@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Cinzel Decorative', 'Cinzel', serif;
+    --font-serif: 'Cinzel', serif;
+    --font-kanji: 'Yuji Boku', serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    
+    /* Japanese Feudal Palette */
+    --color-sumi: #0b0d12;
+    --color-sumi-card: #121722;
+    --color-sumi-border: #222b3d;
+    --color-crimson: #991b1b;
+    --color-crimson-bright: #dc2626;
+    --color-gold: #ca8a04;
+    --color-gold-bright: #facc15;
+    --color-makimono: #f5ede0;
+    --color-makimono-border: #d4c2a5;
+    --color-makimono-ink: #1c1917;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.05em;
+  }
+
+  .font-kanji {
+    font-family: var(--font-kanji);
+  }
+
+  .font-serif-shinobi {
+    font-family: var(--font-serif);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(11, 13, 18, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(153, 27, 27, 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(220, 38, 38, 0.7);
+}
+
+/* Japanese Makimono Scroll texture */
+.bg-parchment {
+  background-color: #f6eedf;
+  background-image: radial-gradient(#d6c4a8 0.75px, transparent 0.75px), radial-gradient(#d6c4a8 0.75px, #f6eedf 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+}
+
+/* Sumi-e dark mist */
+.bg-sumi-dark {
+  background: linear-gradient(180deg, #0b0d12 0%, #10141e 50%, #080a0e 100%);
+}
+
+.sumi-glass {
+  background: rgba(18, 23, 34, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.sumi-glass-amber {
+  background: rgba(18, 23, 34, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(202, 138, 4, 0.25);
+}
+
+.gold-glow {
+  box-shadow: 0 0 25px rgba(234, 179, 8, 0.25);
+}
+
+.crimson-glow {
+  box-shadow: 0 0 25px rgba(220, 38, 38, 0.3);
+}
+
+/* Custom pulse animations */
+@keyframes katana-slash {
+  0% {
+    transform: scaleX(0) rotate(-35deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scaleX(1.3) rotate(-35deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1) rotate(-35deg);
+    opacity: 0;
+  }
+}
+
+.animate-slash {
+  animation: katana-slash 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
