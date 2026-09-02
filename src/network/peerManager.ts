@@ -1,174 +1,186 @@
-import Peer, { type DataConnection } from 'peerjs';
-import type { NetworkMessage, GameState, RoomConfig, ChatMessage, Player } from '../types/game';
+import { joinRoom, selfId, type Room, type MessageAction, type MessageContext } from 'trystero';
+import type { GameState, ChatMessage, Player } from '../types/game';
 
 export interface PeerManagerEvents {
   onStateUpdate: (state: GameState) => void;
   onChatMessage: (message: ChatMessage) => void;
-  onPlayerJoinRequest?: (player: Player, conn: DataConnection) => void;
-  onPeerError: (err: string) => void;
-  onConnectedToHost?: () => void;
+  onPlayerJoinRequest?: (player: Player, peerId: string) => void;
+  onPeerJoin?: (peerId: string) => void;
+  onPeerLeave?: (peerId: string) => void;
+  onNightActionReceived?: (playerId: string, targetId: string | null) => void;
+  onVoteReceived?: (playerId: string, targetId: string | null) => void;
+  onPeerError?: (err: string) => void;
+  onConnectedToRoom?: () => void;
 }
 
 export class PeerManager {
-  private peer: Peer | null = null;
-  private connections: Map<string, DataConnection> = new Map();
-  private hostConnection: DataConnection | null = null;
+  private room: Room | null = null;
   private isHost: boolean = false;
   private events: PeerManagerEvents;
+  private myPlayer: Player | null = null;
+  public myPeerId: string = selfId;
+
+  // Actions
+  private stateAction: MessageAction | null = null;
+  private chatAction: MessageAction | null = null;
+  private joinReqAction: MessageAction | null = null;
+  private nightActionAction: MessageAction | null = null;
+  private voteAction: MessageAction | null = null;
 
   constructor(events: PeerManagerEvents) {
     this.events = events;
   }
 
-  public createRoom(roomCode: string, _hostPlayer?: Player): Promise<string> {
-    this.isHost = true;
-    const peerId = `nkn-shinobi-${roomCode.toLowerCase()}`;
+  /**
+   * Connect to room with Room Code via WebRTC Serverless Mesh (Trystero)
+   */
+  public initRoom(roomCode: string, player: Player, isHost: boolean): Promise<string> {
+    this.isHost = isHost;
+    this.myPlayer = player;
+    const sanitizedCode = roomCode.trim().toUpperCase();
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       try {
-        this.peer = new Peer(peerId, {
-          debug: 1,
-        });
+        this.room = joinRoom(
+          {
+            appId: 'nkn-shinobi-social-game',
+            rtcConfig: {
+              iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' },
+              ],
+            },
+          },
+          sanitizedCode
+        );
 
-        this.peer.on('open', (id) => {
-          resolve(id);
-        });
+        // Bind Action Channels
+        this.stateAction = this.room.makeAction('state');
+        this.chatAction = this.room.makeAction('chat');
+        this.joinReqAction = this.room.makeAction('joinReq');
+        this.nightActionAction = this.room.makeAction('nightAction');
+        this.voteAction = this.room.makeAction('vote');
 
-        this.peer.on('connection', (conn) => {
-          conn.on('open', () => {
-            this.connections.set(conn.peer, conn);
-          });
+        this.stateAction.onMessage = (state: unknown) => {
+          this.events.onStateUpdate(state as GameState);
+        };
 
-          conn.on('data', (data) => {
-            this.handleIncomingDataAsHost(data as NetworkMessage);
-          });
+        this.chatAction.onMessage = (msg: unknown) => {
+          this.events.onChatMessage(msg as ChatMessage);
+        };
 
-          conn.on('close', () => {
-            this.connections.delete(conn.peer);
-          });
-
-          conn.on('error', (err) => {
-            console.warn('Connection error:', err);
-          });
-        });
-
-        this.peer.on('error', (err) => {
-          console.warn('Peer host warning:', err);
-          resolve(peerId);
-        });
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-
-  public joinRoom(roomCode: string, player: Player, _config?: RoomConfig): Promise<void> {
-    this.isHost = false;
-    const hostPeerId = `nkn-shinobi-${roomCode.toLowerCase()}`;
-
-    return new Promise((resolve, reject) => {
-      try {
-        this.peer = new Peer({
-          debug: 1,
-        });
-
-        this.peer.on('open', () => {
-          if (!this.peer) return;
-          const conn = this.peer.connect(hostPeerId, {
-            reliable: true,
-          });
-
-          conn.on('open', () => {
-            this.hostConnection = conn;
-            if (this.events.onConnectedToHost) {
-              this.events.onConnectedToHost();
-            }
-
-            const joinMsg: NetworkMessage = {
-              type: 'JOIN_REQUEST',
-              name: player.name,
-              avatarSeed: player.avatarSeed,
+        this.joinReqAction.onMessage = (req: unknown, context: MessageContext) => {
+          if (this.isHost && this.events.onPlayerJoinRequest) {
+            const data = req as { name: string; avatarSeed: number; peerId: string };
+            const newPlayer: Player = {
+              id: data.peerId || context.peerId,
+              name: data.name,
+              avatarSeed: data.avatarSeed,
+              isHost: false,
+              isBot: false,
+              isAlive: true,
+              votesReceived: 0,
+              votedFor: null,
+              nightActionTarget: null,
+              isSilenced: false,
+              isProtected: false,
+              isShieldReflecting: false,
             };
-            conn.send(joinMsg);
-            resolve();
-          });
+            this.events.onPlayerJoinRequest(newPlayer, context.peerId);
+          }
+        };
 
-          conn.on('data', (data) => {
-            this.handleIncomingDataAsClient(data as NetworkMessage);
-          });
+        this.nightActionAction.onMessage = (data: unknown) => {
+          if (this.isHost && this.events.onNightActionReceived) {
+            const payload = data as { playerId: string; targetId: string | null };
+            this.events.onNightActionReceived(payload.playerId, payload.targetId);
+          }
+        };
 
-          conn.on('error', (err) => {
-            this.events.onPeerError(`Erro ao conectar à sala ${roomCode}: ${err.type || 'Anfitrião não encontrado'}`);
-            reject(err);
-          });
-        });
+        this.voteAction.onMessage = (data: unknown) => {
+          if (this.isHost && this.events.onVoteReceived) {
+            const payload = data as { playerId: string; targetId: string | null };
+            this.events.onVoteReceived(payload.playerId, payload.targetId);
+          }
+        };
 
-        this.peer.on('error', (err) => {
-          this.events.onPeerError(`Falha na conexão Peer: ${err.message || 'Serviço indisponível'}`);
-          reject(err);
-        });
+        // Room lifecycle events
+        this.room.onPeerJoin = (peerId: string) => {
+          if (this.events.onPeerJoin) {
+            this.events.onPeerJoin(peerId);
+          }
+
+          // If client, announce presence by sending join request
+          if (!this.isHost && this.joinReqAction && this.myPlayer) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (this.joinReqAction as any).send({
+              name: this.myPlayer.name,
+              avatarSeed: this.myPlayer.avatarSeed,
+              peerId: this.myPeerId,
+            });
+          }
+        };
+
+        this.room.onPeerLeave = (peerId: string) => {
+          if (this.events.onPeerLeave) {
+            this.events.onPeerLeave(peerId);
+          }
+        };
+
+        if (this.events.onConnectedToRoom) {
+          this.events.onConnectedToRoom();
+        }
+
+        resolve(this.myPeerId);
       } catch (err) {
-        reject(err);
+        console.error('Trystero room connection error:', err);
+        if (this.events.onPeerError) {
+          this.events.onPeerError(`Falha ao conectar à sala P2P: ${String(err)}`);
+        }
+        resolve(this.myPeerId);
       }
     });
   }
 
-  public broadcastState(gameState: GameState) {
-    if (!this.isHost) return;
-    const msg: NetworkMessage = {
-      type: 'STATE_UPDATE',
-      gameState,
-    };
-    this.connections.forEach((conn) => {
-      if (conn.open) {
-        conn.send(msg);
+  public broadcastState(gameState: GameState, targetPeerId?: string) {
+    if (this.stateAction) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const action = this.stateAction as any;
+      if (targetPeerId) {
+        action.send(gameState, { target: targetPeerId });
+      } else {
+        action.send(gameState);
       }
-    });
+    }
   }
 
   public broadcastChat(message: ChatMessage) {
-    if (!this.isHost) return;
-    const msg: NetworkMessage = {
-      type: 'CHAT_MESSAGE',
-      message,
-    };
-    this.connections.forEach((conn) => {
-      if (conn.open) {
-        conn.send(msg);
-      }
-    });
-  }
-
-  public sendToHost(msg: NetworkMessage) {
-    if (this.hostConnection && this.hostConnection.open) {
-      this.hostConnection.send(msg);
+    if (this.chatAction) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.chatAction as any).send(message);
     }
   }
 
-  private handleIncomingDataAsHost(data: NetworkMessage) {
-    if (data.type === 'CHAT_MESSAGE') {
-      this.events.onChatMessage(data.message);
+  public submitNightAction(playerId: string, targetId: string | null) {
+    if (this.nightActionAction) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.nightActionAction as any).send({ playerId, targetId });
     }
   }
 
-  private handleIncomingDataAsClient(data: NetworkMessage) {
-    if (data.type === 'STATE_UPDATE') {
-      this.events.onStateUpdate(data.gameState);
-    } else if (data.type === 'CHAT_MESSAGE') {
-      this.events.onChatMessage(data.message);
+  public submitVote(playerId: string, targetId: string | null) {
+    if (this.voteAction) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.voteAction as any).send({ playerId, targetId });
     }
   }
 
-  public destroy() {
-    this.connections.forEach((conn) => conn.close());
-    this.connections.clear();
-    if (this.hostConnection) {
-      this.hostConnection.close();
-      this.hostConnection = null;
-    }
-    if (this.peer) {
-      this.peer.destroy();
-      this.peer = null;
+  public leave() {
+    if (this.room) {
+      this.room.leave();
+      this.room = null;
     }
   }
 }

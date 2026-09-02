@@ -60,6 +60,8 @@ export const App: React.FC = () => {
 
   const peerManagerRef = useRef<PeerManager | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentPlayerRef = useRef<Player | null>(null);
+  currentPlayerRef.current = currentPlayer;
 
   const toggleMute = () => {
     const next = !isMuted;
@@ -76,12 +78,17 @@ export const App: React.FC = () => {
       timestamp: Date.now(),
       channel: 'SYSTEM',
     };
-    setGameState((prev) => ({
-      ...prev,
-      messages: [...prev.messages, sysMsg],
-    }));
+    setGameState((prev) => {
+      const updated = {
+        ...prev,
+        messages: [...prev.messages, sysMsg],
+      };
+      peerManagerRef.current?.broadcastChat(sysMsg);
+      return updated;
+    });
   }, []);
 
+  // 1. Create Room (Host)
   const handleCreateRoom = async (playerName: string) => {
     const roomCode = `NKN-${Math.floor(1000 + Math.random() * 9000)}`;
     const hostPlayer: Player = {
@@ -125,51 +132,88 @@ export const App: React.FC = () => {
 
     setGameState(initialGameState);
 
+    // Setup WebRTC Mesh
     const manager = new PeerManager({
-      onStateUpdate: (state) => setGameState(state),
-      onChatMessage: (msg) =>
-        setGameState((prev) => ({ ...prev, messages: [...prev.messages, msg] })),
-      onPeerError: (err) => console.warn('Peer host warning:', err),
-      onPlayerJoinRequest: (newPlayer, conn) => {
+      onStateUpdate: (state) => {
+        setGameState(state);
+        const myId = currentPlayerRef.current?.id;
+        if (myId) {
+          const synced = state.players.find((p) => p.id === myId || p.name === currentPlayerRef.current?.name);
+          if (synced) setCurrentPlayer(synced);
+        }
+      },
+      onChatMessage: (msg) => {
         setGameState((prev) => {
-          if (prev.players.some((p) => p.name.toLowerCase() === newPlayer.name.toLowerCase())) {
-            newPlayer.name = `${newPlayer.name}_${Math.floor(Math.random() * 100)}`;
+          if (prev.messages.some((m) => m.id === msg.id)) return prev;
+          return { ...prev, messages: [...prev.messages, msg] };
+        });
+      },
+      onPlayerJoinRequest: (newPlayer, senderPeerId) => {
+        setGameState((prev) => {
+          let uniqueName = newPlayer.name;
+          if (prev.players.some((p) => p.name.toLowerCase() === uniqueName.toLowerCase())) {
+            uniqueName = `${uniqueName}_${Math.floor(Math.random() * 100)}`;
           }
+          newPlayer.name = uniqueName;
+          newPlayer.id = senderPeerId;
+
+          // Check if already in list
+          if (prev.players.some((p) => p.id === senderPeerId)) {
+            return prev;
+          }
+
           const updatedPlayers = [...prev.players, newPlayer];
           const updatedState = {
             ...prev,
             players: updatedPlayers,
           };
-          conn.send({
-            type: 'JOIN_ACCEPTED',
-            playerId: newPlayer.id,
-            gameState: updatedState,
-            config: newConfig,
-          });
           manager.broadcastState(updatedState);
           return updatedState;
         });
       },
+      onNightActionReceived: (playerId, targetId) => {
+        setGameState((prev) => {
+          const updatedPlayers = prev.players.map((p) =>
+            p.id === playerId ? { ...p, nightActionTarget: targetId } : p
+          );
+          const updatedState = { ...prev, players: updatedPlayers };
+          manager.broadcastState(updatedState);
+          return updatedState;
+        });
+      },
+      onVoteReceived: (playerId, targetId) => {
+        setGameState((prev) => {
+          const updatedPlayers = prev.players.map((p) =>
+            p.id === playerId ? { ...p, votedFor: targetId } : p
+          );
+          const updatedState = { ...prev, players: updatedPlayers };
+          manager.broadcastState(updatedState);
+          return updatedState;
+        });
+      },
+      onPeerError: (err) => console.warn('P2P warning:', err),
     });
 
     try {
-      await manager.createRoom(roomCode, hostPlayer);
+      await manager.initRoom(roomCode, hostPlayer, true);
       peerManagerRef.current = manager;
     } catch {
-      // Local fallback
+      // safe fallback
     }
 
     sfx.playParchment();
   };
 
+  // 2. Join Room (Client)
   const handleJoinRoom = async (roomCode: string, playerName: string) => {
+    const sanitizedCode = roomCode.trim().toUpperCase();
     const clientPlayer: Player = {
       id: `player-client-${Date.now()}`,
       name: playerName,
       isHost: false,
       isBot: false,
       isAlive: true,
-      avatarSeed: 2,
+      avatarSeed: Math.floor(Math.random() * 100),
       votesReceived: 0,
       votedFor: null,
       nightActionTarget: null,
@@ -179,25 +223,39 @@ export const App: React.FC = () => {
     };
 
     setCurrentPlayer(clientPlayer);
+    setConfig((prev) => ({ ...prev, roomCode: sanitizedCode }));
     setIsInRoom(true);
 
     const manager = new PeerManager({
-      onStateUpdate: (state) => setGameState(state),
-      onChatMessage: (msg) =>
-        setGameState((prev) => ({ ...prev, messages: [...prev.messages, msg] })),
+      onStateUpdate: (state) => {
+        setGameState(state);
+        const myName = currentPlayerRef.current?.name;
+        const myId = currentPlayerRef.current?.id;
+        const synced = state.players.find((p) => p.id === myId || p.name === myName);
+        if (synced) {
+          setCurrentPlayer(synced);
+        }
+      },
+      onChatMessage: (msg) => {
+        setGameState((prev) => {
+          if (prev.messages.some((m) => m.id === msg.id)) return prev;
+          return { ...prev, messages: [...prev.messages, msg] };
+        });
+      },
       onPeerError: (err) => {
-        alert(err);
+        console.warn('P2P error:', err);
       },
     });
 
     try {
-      await manager.joinRoom(roomCode, clientPlayer, config);
+      await manager.initRoom(sanitizedCode, clientPlayer, false);
       peerManagerRef.current = manager;
     } catch {
       // fallback
     }
   };
 
+  // 3. Add Bots to Lobby
   const handleAddBots = (count: number) => {
     if (!currentPlayer?.isHost) return;
 
@@ -231,6 +289,7 @@ export const App: React.FC = () => {
     sfx.playParchment();
   };
 
+  // 4. Start Game (Distribute roles & enter NIGHT)
   const handleStartGame = () => {
     if (!currentPlayer?.isHost) return;
     if (gameState.players.length < config.minPlayers) return;
@@ -274,6 +333,7 @@ export const App: React.FC = () => {
     addSystemMessage('A escuridão desce sobre a vila. Ninjas, executem suas missões secretas sob o manto da noite!');
   };
 
+  // 5. Send Chat Message
   const handleSendMessage = (content: string, channel: 'PUBLIC' | 'NUKENIN' | 'DEAD') => {
     if (!currentPlayer) return;
 
@@ -294,38 +354,49 @@ export const App: React.FC = () => {
     });
   };
 
+  // 6. Submit Night Action
   const handleConfirmNightAction = (targetId: string | null) => {
     if (!currentPlayer) return;
     setSelectedTargetId(targetId);
 
-    setGameState((prev) => {
-      const updatedPlayers = prev.players.map((p) =>
-        p.id === currentPlayer.id ? { ...p, nightActionTarget: targetId } : p
-      );
-      const updatedState = { ...prev, players: updatedPlayers };
-      peerManagerRef.current?.broadcastState(updatedState);
-      return updatedState;
-    });
+    if (currentPlayer.isHost) {
+      setGameState((prev) => {
+        const updatedPlayers = prev.players.map((p) =>
+          p.id === currentPlayer.id ? { ...p, nightActionTarget: targetId } : p
+        );
+        const updatedState = { ...prev, players: updatedPlayers };
+        peerManagerRef.current?.broadcastState(updatedState);
+        return updatedState;
+      });
+    } else {
+      peerManagerRef.current?.submitNightAction(currentPlayer.id, targetId);
+    }
 
     sfx.playKatanaSlash();
   };
 
+  // 7. Submit Vote
   const handleSelectVoteTarget = (targetId: string) => {
     if (!currentPlayer || !currentPlayer.isAlive) return;
     setSelectedTargetId(targetId);
 
-    setGameState((prev) => {
-      const updatedPlayers = prev.players.map((p) =>
-        p.id === currentPlayer.id ? { ...p, votedFor: targetId } : p
-      );
-      const updatedState = { ...prev, players: updatedPlayers };
-      peerManagerRef.current?.broadcastState(updatedState);
-      return updatedState;
-    });
+    if (currentPlayer.isHost) {
+      setGameState((prev) => {
+        const updatedPlayers = prev.players.map((p) =>
+          p.id === currentPlayer.id ? { ...p, votedFor: targetId } : p
+        );
+        const updatedState = { ...prev, players: updatedPlayers };
+        peerManagerRef.current?.broadcastState(updatedState);
+        return updatedState;
+      });
+    } else {
+      peerManagerRef.current?.submitVote(currentPlayer.id, targetId);
+    }
 
     sfx.playTaiko();
   };
 
+  // Phase transition: End Night -> Resolve and show Dawn announcement
   const advanceFromNightToDawn = useCallback(() => {
     setGameState((prev) => {
       const updatedWithBots = prev.players.map((p) => {
@@ -352,15 +423,16 @@ export const App: React.FC = () => {
         winnerFaction: winner,
       };
 
-      const myRef = updatedPlayers.find((p) => p.id === currentPlayer?.id);
+      const myRef = updatedPlayers.find((p) => p.id === currentPlayerRef.current?.id || p.name === currentPlayerRef.current?.name);
       if (myRef) setCurrentPlayer(myRef);
 
       peerManagerRef.current?.broadcastState(nextState);
       sfx.playGong();
       return nextState;
     });
-  }, [currentPlayer?.id]);
+  }, []);
 
+  // Phase transition: Dawn Announcement -> Day Discussion
   const handleProceedToDiscussion = () => {
     setGameState((prev) => {
       const nextState: GameState = {
@@ -374,6 +446,7 @@ export const App: React.FC = () => {
     setSelectedTargetId(null);
   };
 
+  // Phase transition: Day Discussion -> Day Voting
   const advanceFromDiscussionToVoting = useCallback(() => {
     setGameState((prev) => {
       const nextState: GameState = {
@@ -388,6 +461,7 @@ export const App: React.FC = () => {
     setSelectedTargetId(null);
   }, [config.dayVotingDurationSeconds]);
 
+  // Phase transition: Day Voting -> Tally & Execution / Night
   const advanceFromVotingToResolution = useCallback(() => {
     setGameState((prev) => {
       const updatedWithBotVotes = prev.players.map((p) => {
@@ -435,7 +509,7 @@ export const App: React.FC = () => {
         winnerFaction: winner,
       };
 
-      const myRef = updatedPlayers.find((p) => p.id === currentPlayer?.id);
+      const myRef = updatedPlayers.find((p) => p.id === currentPlayerRef.current?.id || p.name === currentPlayerRef.current?.name);
       if (myRef) setCurrentPlayer(myRef);
 
       peerManagerRef.current?.broadcastState(nextState);
@@ -446,8 +520,9 @@ export const App: React.FC = () => {
 
       return nextState;
     });
-  }, [config.nightDurationSeconds, config.revealRoleOnDeath, currentPlayer?.id]);
+  }, [config.nightDurationSeconds, config.revealRoleOnDeath]);
 
+  // Timer Tick Engine (Runs on Host)
   useEffect(() => {
     if (!currentPlayer?.isHost || gameState.phase === 'LOBBY' || gameState.phase === 'GAME_OVER') {
       return;

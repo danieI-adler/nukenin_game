@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Player, RoomConfig, RoleId } from '../../types/game';
 import { ROLES } from '../../engine/roles';
 import {
@@ -11,6 +11,8 @@ import {
   Crown,
   Sparkles,
   ExternalLink,
+  Share2,
+  Radio,
 } from 'lucide-react';
 import { sfx } from '../../audio/soundEffects';
 
@@ -42,10 +44,23 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [playerNameInput, setPlayerNameInput] = useState('');
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'JOIN' | 'CREATE'>('CREATE');
 
   const isHost = currentPlayer?.isHost ?? false;
   const canStart = players.length >= config.minPlayers;
+
+  // Auto-detect ?room=... from URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam) {
+        setRoomCodeInput(roomParam.toUpperCase());
+        setActiveTab('JOIN');
+      }
+    }
+  }, []);
 
   const handleCopyCode = () => {
     if (!config.roomCode) return;
@@ -53,6 +68,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     setIsCopied(true);
     sfx.playParchment();
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleCopyLink = () => {
+    if (!config.roomCode) return;
+    const url = `${window.location.origin}${window.location.pathname}?room=${config.roomCode}`;
+    navigator.clipboard.writeText(url);
+    setIsLinkCopied(true);
+    sfx.playParchment();
+    setTimeout(() => setIsLinkCopied(false), 2000);
   };
 
   const toggleRole = (roleId: RoleId) => {
@@ -209,8 +233,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             集
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
-              Código de Entrada da Sala
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                Código de Entrada da Sala
+              </span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-600/50 text-emerald-400 text-[9px] font-mono">
+                <Radio className="w-2.5 h-2.5 animate-pulse" /> P2P WebRTC
+              </span>
             </div>
             <div className="font-mono text-2xl font-black text-amber-400 tracking-wider">
               {config.roomCode}
@@ -218,14 +247,23 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleCopyCode}
-            className="px-3.5 py-2 rounded-lg bg-[#1a2232] border border-[#2d3748] hover:border-amber-500/60 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3 py-2 rounded-lg bg-[#1a2232] border border-[#2d3748] hover:border-amber-500/60 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
           >
             {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{isCopied ? 'Código Copiado!' : 'Copiar Código'}</span>
+            <span>{isCopied ? 'Copiado!' : 'Código'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="px-3 py-2 rounded-lg bg-[#1a2232] border border-[#2d3748] hover:border-amber-500/60 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            {isLinkCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-amber-400" />}
+            <span>{isLinkCopied ? 'Link Copiado!' : 'Copiar Link'}</span>
           </button>
 
           {isHost && (
@@ -235,10 +273,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 sfx.playParchment();
                 onAddBots(1);
               }}
-              className="px-3.5 py-2 rounded-lg bg-[#1e2536] border border-[#3b475e] hover:border-slate-400 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-3 py-2 rounded-lg bg-[#1e2536] border border-[#3b475e] hover:border-slate-400 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <Bot className="w-3.5 h-3.5 text-amber-400" />
-              <span>+1 Bot Ninja</span>
+              <span>+1 Bot</span>
             </button>
           )}
 
@@ -249,7 +287,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 sfx.playParchment();
                 onAddBots(4);
               }}
-              className="px-3.5 py-2 rounded-lg bg-[#1e2536] border border-[#3b475e] hover:border-slate-400 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-3 py-2 rounded-lg bg-[#1e2536] border border-[#3b475e] hover:border-slate-400 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <Bot className="w-3.5 h-3.5 text-amber-400" />
               <span>+4 Bots</span>
