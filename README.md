@@ -54,38 +54,6 @@
 4. **Ataques Noturnos**: Ataque coletivo Nukenin, Katana do Samurai, Explosão Kamikaze e Golpe do Renegado.
 5. **Aplicação de Danos e Reflexões**: Vítimas caem, retaliações do Anjo/Escudeiro são processadas e o Alvorecer é anunciado.
 
----
-
-## 🚀 Como Executar Localmente
-
-```bash
-# Clone o repositório
-git clone https://github.com/SEU_USUARIO/nukenin_game.git
-cd nukenin_game
-
-# Instale as dependências
-npm install
-
-# Inicie o servidor de desenvolvimento
-npm run dev
-```
-
----
-
-## 📦 Como Publicar no GitHub Pages
-
-1. Crie um novo repositório chamado `nukenin_game` no seu GitHub.
-2. No terminal do projeto, vincule o repositório remoto e faça o push:
-   ```bash
-   git init
-   git add .
-   git commit -m "feat: lancamento do Nukenin Game multiplayer com tema ninja e Easter Egg NKN DANCROX"
-   git branch -M main
-   git remote add origin https://github.com/SEU_USUARIO/nukenin_game.git
-   git push -u origin main
-   ```
-3. No GitHub, acesse **Settings > Pages > Source** e selecione **GitHub Actions**.
-4. O workflow `.github/workflows/deploy.yml` executará o build e publicará o jogo automaticamente em `https://SEU_USUARIO.github.io/nukenin_game/`!
 
 ---
 
