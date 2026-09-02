@@ -20,7 +20,9 @@ export const NightPhaseOverlay: React.FC<NightPhaseOverlayProps> = ({
   const role = currentPlayer.role ? ROLES[currentPlayer.role] : ROLES.CIVIL;
   const targetPlayer = players.find((p) => p.id === selectedTargetId);
   const isSilenced = currentPlayer.isSilenced;
-  const hasAction = role.hasNightAction && (!role.maxUses || (currentPlayer.usesRemaining ?? 1) > 0);
+  const hasAction =
+    Boolean(role.hasNightAction || currentPlayer.hasNightAction) &&
+    (!role.maxUses || (currentPlayer.usesRemaining ?? 1) > 0);
 
   return (
     <div className="w-full bg-gradient-to-b from-[#10141f] via-[#0b0e14] to-[#07090d] border border-red-950/60 rounded-xl p-4 sm:p-5 shadow-2xl relative overflow-hidden backdrop-blur-md">

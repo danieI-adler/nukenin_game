@@ -24,7 +24,17 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
   const currentPlayer = players.find((p) => p.id === currentPlayerId);
   const isNight = phase === 'NIGHT';
   const isVoting = phase === 'DAY_VOTING';
-  const canInteract = currentPlayer?.isAlive && !currentPlayer?.isSilenced && (isNight || isVoting);
+
+  // Check if current player actually has an active night action
+  const roleDef = currentPlayer?.role ? ROLES[currentPlayer.role] : null;
+  const hasNightAction =
+    Boolean(roleDef?.hasNightAction || currentPlayer?.hasNightAction) &&
+    (!roleDef?.maxUses || (currentPlayer?.usesRemaining ?? 1) > 0);
+
+  const canInteract =
+    currentPlayer?.isAlive &&
+    !currentPlayer?.isSilenced &&
+    ((isNight && hasNightAction) || isVoting);
 
   const getRoleBadge = (roleId?: RoleId) => {
     if (!roleId) return null;
@@ -52,12 +62,16 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
             Habitantes da Vila Shinobi ({players.filter((p) => p.isAlive).length}/{players.length} vivos)
           </h2>
         </div>
-        {canInteract && (
+        {canInteract ? (
           <div className="text-xs font-mono text-amber-400/90 flex items-center gap-1 animate-pulse">
             <Crosshair className="w-3.5 h-3.5 text-red-500" />
             <span>{isNight ? 'Clique para escolher/trocar seu alvo' : 'Clique para votar'}</span>
           </div>
-        )}
+        ) : isNight ? (
+          <div className="text-xs font-mono text-slate-400">
+            <span>Aguarde o alvorecer...</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -72,7 +86,6 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
               onClick={() => {
                 if (isTargetable) {
                   sfx.playParchment();
-                  // Toggle: if already selected, deselect; otherwise select
                   if (isSelected) {
                     onSelectTarget(null);
                   } else {
@@ -153,7 +166,6 @@ export const VillageBoard: React.FC<VillageBoardProps> = ({
                   {player.name}
                 </div>
 
-                {/* Only reveal role if dead or if current player */}
                 {(!player.isAlive && revealRoleOnDeath && player.role) || (isMe && player.role) ? (
                   <div className="mt-1 flex justify-center">{getRoleBadge(player.role)}</div>
                 ) : null}

@@ -333,7 +333,7 @@ export const App: React.FC = () => {
     addSystemMessage('A escuridão desce sobre a vila. Ninjas, executem suas missões secretas sob o manto da noite!');
   };
 
-  // 5. Send Chat Message (Role is NEVER leaked in public chat)
+  // 5. Send Chat Message
   const handleSendMessage = (content: string, channel: 'PUBLIC' | 'NUKENIN' | 'DEAD') => {
     if (!currentPlayer) return;
 
@@ -353,9 +353,17 @@ export const App: React.FC = () => {
     });
   };
 
-  // 6. Submit Night Action
+  // 6. Submit Night Action (Guarded so roles without actions cannot act)
   const handleConfirmNightAction = (targetId: string | null) => {
     if (!currentPlayer) return;
+
+    const roleDef = currentPlayer.role ? ROLES[currentPlayer.role] : null;
+    const hasNightAction =
+      Boolean(roleDef?.hasNightAction || currentPlayer.hasNightAction) &&
+      (!roleDef?.maxUses || (currentPlayer.usesRemaining ?? 1) > 0);
+
+    if (!hasNightAction && targetId !== null) return;
+
     setSelectedTargetId(targetId);
 
     if (currentPlayer.isHost) {
